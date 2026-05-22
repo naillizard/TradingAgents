@@ -1,0 +1,49 @@
+app = "tradingagents-hermes"
+primary_region = "syd"
+
+[build]
+  dockerfile = "Dockerfile"
+
+[mounts]
+  source = "hermes_data"
+  destination = "/opt/data"
+  # Maps to ~/.hermes inside the container.
+  # Contains: hermes.db, skills/, ta/ (TradingAgents repo cloned on first use).
+  # Survives redeployments.
+
+[env]
+  PORT = "8080"
+
+[[services]]
+  # Internal gateway — not public-facing. Accessed via fly proxy or SSH tunnel.
+  internal_port = 8080
+  protocol = "tcp"
+
+  [[services.ports]]
+    port = 443
+    handlers = ["tls", "http"]
+
+  [[services.ports]]
+    port = 80
+    handlers = ["http"]
+
+  [services.concurrency]
+    type = "requests"
+    hard_limit = 50
+    soft_limit = 25
+
+[processes]
+  # Hermes gateway (main agent process)
+  gateway = "hermes start"
+  # Hermes dashboard (config UI, exposed via fly proxy)
+  dashboard = "hermes dashboard"
+
+[vm]
+  # shared-cpu-2x gives enough headroom for LangGraph multi-agent analysis
+  size = "shared-cpu-2x"
+  memory = "2gb"
+
+# /opt/data volume layout (persistent, not in git):
+#   hermes.db          — SQLite: Hermes memory + trading tables
+#   skills/            — Hermes skill files (seed + auto-generated)
+#   ta/                — TradingAgents repo (cloned by Hermes on first use)
